@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia de Treinamento: Tratamento de Balancetes Complexos</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #0056b3;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }
+        h3 {
+            color: #0056b3;
+            margin-top: 30px;
+        }
+        p {
+            margin-bottom: 15px;
+        }
+        ul {
+            list-style-type: disc;
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        ol {
+            list-style-type: decimal;
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            color: #555;
+        }
+        .example-table {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        .example-table tr.level-1 td {
+            background-color: #0056b3; /* Darker blue */
+            color: white;
+            font-weight: bold;
+        }
+        .example-table tr.level-2 td {
+            background-color: #007bff; /* Medium blue */
+            color: white;
+            font-weight: bold;
+        }
+        .example-table tr.level-3 td {
+            background-color: #6c757d; /* Gray */
+            color: white;
+        }
+        .example-table tr.level-4 td {
+            background-color: #adb5bd; /* Lighter gray */
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 5px;
+            border-left: 5px solid #ffeeba;
+            margin-bottom: 15px;
+        }
+        .code-block {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+        .checklist {
+            list-style-type: none;
+            padding: 0;
+        }
+        .checklist li {
+            background-color: #e9f7ef;
+            border-left: 5px solid #28a745;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Guia de Treinamento: Tratamento de Balancetes Complexos</h1>
+        <p>Este guia fornece um passo a passo detalhado, em linguagem imperativa, para o treinamento do agente, abordando o tratamento de balancetes em formatos complexos como TXT e Excel (incluindo células mescladas e hierarquia espalhada em colunas).</p>
+
+        <h2>Passo a passo — TXT (arquivos tipo o <code>04. Ices - Balancete 2022.TXT</code>)</h2>
+        <ol>
+            <li><strong>Abrir o arquivo em modo texto</strong> e ler as primeiras N linhas (ex.: 200) para amostrar o layout.</li>
+            <li><strong>Remover cabeçalhos gerais e rodapés</strong> (linhas que contenham “Emissão:”, CNPJ, “Folha:”, linhas totalmente vazias) antes de processar as linhas de dados.</li>
+            <li><strong>Detectar o formato de separação</strong>:
+                <ul>
+                    <li>Tente <code>re.split(r'\s{2,}', line.strip())</code> (split por 2+ espaços).</li>
+                    <li>Se falhar, tente <code>read_fwf</code> (fixed width) — determinar empiricamente as colunas por inspeção das posições de mudanças de espaço (calcular os índices onde várias linhas apresentam uma sequência de espaços em mesma posição).</li>
+                    <li>Se existirem <code>|</code>, <code>;</code> ou <code>\t</code>, priorize esses delimitadores.</li>
+                </ul>
+            </li>
+            <li><strong>Se optar por largura fixa (fixed-width)</strong>:
+                <ul>
+                    <li>Calcule automaticamente as bordas: para um conjunto representativo de linhas, determine os índices onde a sequência de espaços aumenta consistentemente — esses índices marcam trocas de campo.</li>
+                    <li>Defina <code>colspecs = [(0, i1), (i1, i2), ...]</code> e use <code>pandas.read_fwf(..., colspecs=colspecs)</code>.</li>
+                </ul>
+            </li>
+            <li><strong>Separar campos com heurística de conteúdo</strong>:
+                <ul>
+                    <li>Identifique a coluna que contém a <em>hierarquia</em> (valores como <code>1</code>, <code>1.1</code>, <code>1.1.01</code>): use regex <code>^\d+(\.\d+)*$</code>.</li>
+                    <li>Identifique a coluna de <em>descrição</em> (texto maior, contém letras).</li>
+                    <li>Identifique as colunas numéricas tentando <code>re.search(r'\d')</code> e parsing numérico (ver passo de parsing).</li>
+                </ul>
+            </li>
+            <li><strong>Parse de números (regras gerais)</strong>:
+                <ul>
+                    <li>Tratar formatos como <code>1.234.567,89</code> e <code>1.234.567,89-</code> (sinal negativo no final) e <code>(1.234,56)</code> como negativo.</li>
+                    <li>Procedimento sugerido:
+                        <ol>
+                            <li>remover espaços e caracteres não-numéricos exceto <code>.</code> <code>,</code> <code>-</code> e parênteses;</li>
+                            <li>detectar se termina com <code>-</code> ou está entre <code>(...)</code> => marcar negativo;</li>
+                            <li>remover milhares (<code>.</code>), trocar vírgula por ponto (<code>replace('.', '').replace(',', '.')</code>), converter para float;</li>
+                            <li>aplicar sinal negativo se necessário;</li>
+                            <li>se quiser manter sem decimais: <code>round()</code> no final.</li>
+                        </ol>
+                    </li>
+                </ul>
+            </li>
+            <li><strong>Detecção/Separação de Classificação e Nome</strong>:
+                <ul>
+                    <li>Se a célula começa com algo que casa com <code>^\d+(\.\d+)*\s+</code>, separar a parte numérica (classificação) do restante (nome).</li>
+                    <li>Caso a hierarquia esteja ausente, adiar para a etapa “reconstruir hierarquia”.</li>
+                </ul>
+            </li>
+            <li><strong>Lidar com linhas “TOTAL” e somas pré-calculadas</strong>:
+                <ul>
+                    <li>Identifique linhas cujo nome contém <code>TOTAL</code>/<code>TOTAIS</code>/<code>SOMA</code> (case-insensitive). Marque-as como candidatas a remoção após recalcular somas.</li>
+                </ul>
+            </li>
+            <li><strong>Construir DataFrame padronizado</strong>:
+                <ul>
+                    <li>Colunas finais: <code>Classificação</code> | <code>Conta</code> | <code>Saldo Anterior</code> | <code>Débito</code> | <code>Crédito</code> | <code>Saldo Atual</code>.</li>
+                    <li>Converter tipos: <code>Classificação</code> = string; valores = numéricos.</li>
+                </ul>
+            </li>
+            <li><strong>Reconstruir hierarquia se ausente ou parcial</strong>:
+                <ul>
+                    <li>Se não houver códigos, classifique cada <code>Conta</code> por palavras-chave (mapa inicial — <code>caixa, banco, estoque, fornecedores, clientes, impostos</code> → categorias base).</li>
+                    <li>Gere códigos hierárquicos incrementais (1, 1.1, 1.1.1...) seguindo a ordem lógica (Ativo → Passivo → Patrimônio Líquido).</li>
+                </ul>
+            </li>
+            <li><strong>Salvar o DataFrame inicial em Excel (temporário)</strong> para permitir inspeção manual se necessário.</li>
+        </ol>
+
+        <h2>Passo a passo — Excel (casos gerais, com fórmulas, com células mescladas e com hierarquia em colunas separadas)</h2>
+
+        <h3>Preparação e leitura</h3>
+        <ol>
+            <li><strong>Abrir com <code>openpyxl.load_workbook(path, data_only=True)</code></strong> para obter os valores calculados de células com fórmulas (se o arquivo foi salvo pelo Excel com valores calculados).
+                <div class="highlight">
+                    <p><strong>Obs:</strong> <code>data_only=True</code> retorna os valores já calculados; se estiver <code>None</code>, significa que o arquivo nunca salvou os valores calculados. Nesse caso, use <code>load_workbook(..., data_only=False)</code> para ler fórmulas e tentar calcular manualmente (ver etapa fórmulas).</p>
+                </div>
+            </li>
+            <li><strong>Escolher a aba correta</strong> (por heurística: aba com mais linhas/colunas preenchidas ou que contenha palavras-chave como “Conta”, “Descrição”, “Saldo”).</li>
+        </ol>
+
+        <h3>Detectar e expandir células mescladas</h3>
+        <ol start="3">
+            <li><strong>Localizar ranges mesclados</strong>: <code>for rng in ws.merged_cells.ranges:</code>.</li>
+            <li><strong>Para cada range mesclado</strong>:
+                <ul>
+                    <li>Ler o valor da célula superior-esquerda: <code>val = ws.cell(rng.min_row, rng.min_col).value</code>.</li>
+                    <li><strong>Desfazer a mescla</strong>: <code>ws.unmerge_cells(str(rng))</code>.</li>
+                    <li><strong>Preencher todas as células do range com <code>val</code></strong> (para manter a informação replicada por linha).</li>
+                    <li><em>Motivo:</em> evita perda de hierarquia/texto que estava “visualmente” sobre várias linhas.</li>
+                </ul>
+            </li>
+            <li><strong>Salvar uma cópia intermediária (opcional)</strong> para inspecionar se a expansão funcionou.</li>
+        </ol>
+
+        <h3>Identificar colunas de hierarquia espalhadas</h3>
+        <ol start="6">
+            <li><strong>Detectar colunas hierárquicas (várias colunas)</strong>:
+                <ul>
+                    <li>Percorra as colunas candidatas; calcule proporção de células que batem com <code>^\d+(\.\d+)*$</code>.</li>
+                    <li>Colunas com alta proporção (>50% ou 60%) são <strong>colunas de hierarquia</strong>.</li>
+                </ul>
+            </li>
+            <li><strong>Concatenar hierarquias</strong>:
+                <ul>
+                    <li>Para cada linha: junte, na ordem das colunas hierárquicas, os valores não vazios separados por <code>.</code> — ex.: <code>1</code>, <code>1.1</code>, <code>1.1.01</code> → <code>1.1.01</code>.</li>
+                    <li>Remova pontos duplicados e <code>.</code> finais.</li>
+                </ul>
+            </li>
+            <li><strong>Se hierarquia e nome vierem na mesma célula</strong> (ex.: <code>1.1.01 DISPONIBILIDADES</code>):
+                <ul>
+                    <li>Separe usando regex <code>^(\d+(\.\d+)*)(\s+)(.*)$</code> → grupo 1 = classificação, grupo 4 = nome.</li>
+                </ul>
+            </li>
+            <li><strong>Normalizar nome e classificação</strong>:
+                <ul>
+                    <li><code>Classificação</code>: string, sem espaços duplicados.</li>
+                    <li><code>Conta</code>: tirar caracteres especiais (<code>-</code>, <code>_</code>), reduzir espaços duplicados, capitalizar (PrimeiraLetra Maiúscula). Conservar siglas (heurística: se palavra inteiramente maiúscula e ≤4 caracteres, mantenha maiúscula).</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>Lidar com fórmulas e células com valores não-salvos</h3>
+        <ol start="10">
+            <li><strong>Se células contiverem fórmulas e <code>data_only</code> não retornou valor</strong>:
+                <ul>
+                    <li>Se fórmulas são simples (SUM sobre células adjacentes), calcule manualmente lendo os valores referenciados.</li>
+                    <li>Se fórmulas são complexas, <strong>marcar linha</strong> para verificação manual e copiar a fórmula como último recurso (ou pedir reabertura no Excel para recalcular e salvar valores).</li>
+                </ul>
+            </li>
+            <li><strong>Destravar/Normalizar colunas de números</strong>:
+                <ul>
+                    <li>Garanta que colunas de valores sejam convertidas para string → aplicar parser numérico (mesmas regras do TXT).</li>
+                    <li>Preencher <code>NaN</code>/vazios com <code>0</code>.</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>Unir, limpar e estruturar</h3>
+        <ol start="12">
+            <li><strong>Juntar colunas móveis e desalinhadas</strong> (ex.: quando a descrição ocupa várias colunas por causa de quebras de linha):
+                <ul>
+                    <li>Concatenar colunas adjacentes que contenham texto e onde uma linha é continuação (heurística: linha sem classificação e com texto → anexar ao nome da linha anterior).</li>
+                </ul>
+            </li>
+            <li><strong>Remover linhas-ruído</strong>:
+                <ul>
+                    <li>Excluir linhas vazias, linhas com apenas caracteres de formatação, linhas com “Página X” etc.</li>
+                </ul>
+            </li>
+            <li><strong>Detectar e tratar linhas “TOTAL” redundantes</strong>:
+                <ul>
+                    <li>Se existir uma <code>Classificação</code> que já representa a conta mãe, remova a linha <code>TOTAL</code> que tenha o mesmo escopo (ou mantenha somente uma delas, preferindo a soma recalculada).</li>
+                </ul>
+            </li>
+            <li><strong>Construir DataFrame final</strong> com colunas padronizadas: <code>Classificação</code> | <code>Conta</code> | <code>Saldo Anterior</code> | <code>Débito</code> | <code>Crédito</code> | <code>Saldo Atual</code>.</li>
+        </ol>
+
+        <h2>Pós-processamento comum (TXT + Excel)</h2>
+        <ol>
+            <li><strong>Parsing e normalização final dos números</strong>:
+                <ul>
+                    <li>Aplica a função <code>parse_num(s)</code> descrita abaixo para todas as células de valor.</li>
+                    <li>Arredonde para inteiro e transforme para formato com separador de milhar <code>.</code> e sem decimais: use <code>format(v, ",.0f").replace(',', '.')</code>.</li>
+                    <li>Função exemplo (pseudocódigo):
+                        <div class="code-block">
+                            <pre><code>def parse_num(s):
+    if s is None or s=='':
+        return 0
+    s = s.strip()
+    neg = False
+    if s.endswith('-') or s.startswith('('):
+        neg = True
+    s = s.replace('.', '').replace(',', '.')
+    s = re.sub(r'[^0-9\.\-]', '', s)
+    v = float(s) if s!='' else 0.0
+    return -v if neg else v
+</code></pre>
+                        </div>
+                    </li>
+                </ul>
+            </li>
+            <li><strong>Recalcular somas das contas-mãe</strong>:
+                <ul>
+                    <li>Construa uma árvore a partir do campo <code>Classificação</code> (cada nó = prefixo do código).</li>
+                    <li>Para cada nó-pai, some os valores de todas as folhas (ou filhos diretos, dependendo da regra) e <strong>substitua/atualize</strong> o valor do pai com esse total.</li>
+                    <li>Se detectar discrepância grande entre soma calculada e valor informado no arquivo, marque a conta para revisão.</li>
+                </ul>
+            </li>
+            <li><strong>Remover linhas duplicadas e redundantes</strong>:
+                <ul>
+                    <li>Se houver duas linhas com mesma <code>Classificação</code> e <code>Conta</code>, agregue somando valores ou elimine duplicatas conforme regra de negócio.</li>
+                </ul>
+            </li>
+            <li><strong>Ordenar</strong> o DataFrame final pela <code>Classificação</code> em ordem natural (não lexicográfica: <code>1</code>, <code>1.1</code>, <code>1.1.1</code>, <code>1.2</code>, ...).
+                <ul>
+                    <li>Ordenação por número por nível: split por <code>.</code> e comparar numericamente.</li>
+                </ul>
+            </li>
+            <li><strong>Validações finais</strong>:
+                <ul>
+                    <li><code>Ativo Total</code> == soma dos subitens (confirmação);</li>
+                    <li><code>Passivo + Patrimônio</code> == <code>Ativo</code> (se aplicável ao escopo do balancete);</li>
+                    <li>Todas as linhas tenham <code>Classificação</code> e <code>Conta</code> preenchidas.</li>
+                </ul>
+            </li>
+            <li><strong>Formatar e salvar o Excel final</strong>:
+                <ul>
+                    <li>Use <code>pandas.to_excel()</code> ou <code>openpyxl</code> para escrever.</li>
+                    <li>Ao salvar com <code>openpyxl</code>, definir <code>cell.number_format = '#.##0'</code> (ou <code>#,##0</code> dependendo do locale) para as colunas de valores.</li>
+                    <li>Nome sugerido: <code>Balanço_Tratado_&lt;origem&gt;.xlsx</code>.</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>Heurísticas práticas e dicas úteis</h2>
+        <ul>
+            <li><strong>Detectar colunas de hierarquia automaticamente</strong>: coluna é hierarquia se >60% dos valores casam com <code>^\d+(\.\d+)*$</code>.</li>
+            <li><strong>Separar classificação e nome quando estão juntos</strong>: regex <code>^(\d+(\.\d+)*)(?:\s*[-–:]?\s*)(.+)$</code>.</li>
+            <li><strong>Tratamento de negativos inconsistentes</strong>: lidar com <code>123,45-</code>, <code>(123,45)</code> e <code>-123,45</code> uniformemente.</li>
+            <li><strong>Salvar logs de correções</strong>: gerar um arquivo <code>corrigidos_log.csv</code> com linhas alteradas (e.g., “preencheu mesclado”, “recalculou soma”, “valor parseado de X para Y”) para auditoria.</li>
+            <li><strong>Mapa de palavras-chave para classificação quando não houver códigos</strong>: manter um arquivo JSON com mapeamentos (ex.: <code>"caixa": "1.1.01.01", "banco": "1.1.01.03", "fornecedores": "2.1.02"</code>). O agente tenta casar palavras do nome da conta com o mapa; se sem correspondência, marca para revisão.</li>
+            <li><strong>Tratamento de PDFs</strong>: se receber PDF, extrair texto com <code>pdfplumber</code>/<code>PyMuPDF</code> e tratar como TXT (aplicar heurísticas acima).</li>
+            <li><strong>Quando não confiar em <code>data_only</code></strong>: se valores de fórmula não estiverem atualizados e não puder calcular com segurança, sinalizar a linha para revisão humana (não inventar valores).</li>
+        </ul>
+
+        <h2>Exemplos rápidos (pseudocódigo)</h2>
+        <ul>
+            <li><strong>Desfazer e propagar mesclados (openpyxl)</strong>:
+                <div class="code-block">
+                    <pre><code>from openpyxl import load_workbook
+wb = load_workbook('balanco.xlsx', data_only=True)
+ws = wb.active
+for rng in list(ws.merged_cells.ranges):
+    top = ws.cell(rng.min_row, rng.min_col).value
+    ws.unmerge_cells(str(rng))
+    for r in range(rng.min_row, rng.max_row+1):
+        for c in range(rng.min_col, rng.max_col+1):
+            ws.cell(r,c).value = top
+wb.save('balanco_expandido.xlsx')
+</code></pre>
+                </div>
+            </li>
+            <li><strong>Concatenar hierarquias em pandas</strong>:
+                <div class="code-block">
+                    <pre><code>hier_cols = ['Nivel1','Nivel2','Nivel3']  # detecte dinamicamente
+df['Classificacao'] = df[hier_cols].fillna('').agg(lambda row: '.'.join([p.strip() for p in row if p and str(p).strip()!='']), axis=1)
+df['Classificacao'] = df['Classificacao'].str.replace(r'\.+\', '.', regex=True).str.strip('.')
+</code></pre>
+                </div>
+            </li>
+        </ul>
+
+        <h2>Checklist final antes de entregar o Excel padronizado</h2>
+        <ul class="checklist">
+            <li>[ ] Todas as linhas têm <code>Classificação</code> e <code>Conta</code>.</li>
+            <li>[ ] Valores convertidos para numérico e formatados <code>#.##0</code>.</li>
+            <li>[ ] Contas-mãe recalculadas a partir de somas de filhas.</li>
+            <li>[ ] Mesclagens desfeitas e valores propagados.</li>
+            <li>[ ] Hierarquias espalhadas reunidas em <strong>uma única coluna</strong>.</li>
+            <li>[ ] Nomes padronizados (sem <code>-</code>, sem espaços duplicados, siglas preservadas quando lógico).</li>
+            <li>[ ] Arquivo salvo como <code>Balanço_Tratado_&lt;origem&gt;.xlsx</code> e log de correções exportado.</li>
+        </ul>
+
+        <h2>Exemplo de Mapeamento de Contas (JSON)</h2>
+        <p>Este arquivo JSON serve como uma tabela de referência para o agente, permitindo a classificação automática de contas sem código, comparando o nome da conta com palavras-chave e atribuindo a classificação contábil padronizada.</p>
+        <div class="code-block">
+            <pre><code>{
+  "Ativo": "1",
+  "Ativo Circulante": "1.1",
+  "Ativo Não Circulante": "1.2",
+
+  "Caixa": "1.1.01.01",
+  "Banco": "1.1.01.02",
+  "Bancos": "1.1.01.02",
+  "Disponibilidades": "1.1.01.03",
+  "Aplicação": "1.1.02.01",
+  "Aplicações": "1.1.02.01",
+  "Estoques": "1.1.03.01",
+  "Estoque": "1.1.03.01",
+  "Clientes": "1.1.04.01",
+  "Contas a Receber": "1.1.04.01",
+  "Impostos a Recuperar": "1.1.05.01",
+
+  "Ativo Não Circulante Realizável a Longo Prazo": "1.2.01",
+  "Investimentos": "1.2.02",
+  "Imobilizado": "1.2.03",
+  "Intangível": "1.2.04",
+
+  "Passivo": "2",
+  "Passivo Circulante": "2.1",
+  "Fornecedores": "2.1.01",
+  "Obrigações Trabalhistas": "2.1.02",
+  "Impostos a Recolher": "2.1.03",
+  "Empréstimos e Financiamentos": "2.1.04",
+
+  "Passivo Não Circulante": "2.2",
+  "Financiamentos LP": "2.2.01",
+  "Provisões": "2.2.02",
+
+  "Patrimônio Líquido": "3",
+  "Capital Social": "3.1",
+  "Reservas": "3.2",
+  "Lucros ou Prejuízos Acumulados": "3.3"
+}
+</code></pre>
+        </div>
+
+        <h3>🔑 Como usar o Mapeamento de Contas:</h3>
+        <ol>
+            <li>Quando o agente encontrar uma conta <strong>sem código</strong>, ele percorre esse JSON.</li>
+            <li>Se o nome da conta contiver uma das <strong>chaves</strong> do JSON (ex.: “Banco do Brasil”), ele mapeia para a <strong>classificação correspondente</strong> (<code>1.1.01.02</code>).</li>
+            <li>Se não encontrar correspondência → marca como “não classificado” para ajuste manual.</li>
+        </ol>
+
+        <p>Este guia serve como um <strong>recurso fundamental</strong> para o treinamento do agente, garantindo a consistência e precisão no tratamento de balanços contábeis, otimizando o fluxo de trabalho e a qualidade dos dados.</p>
+    </div>
+</body>
+</html>
+
